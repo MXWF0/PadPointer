@@ -10,10 +10,9 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6)
 
 PadPointer 是一款面向 Windows 10和11 的轻量级手柄桌面控制工具，使用 Rust 和 Slint 开发，支持 Xbox 及其他兼容 XInput 的手柄。
-单文件约 9.5 MB · 后台内存约 15 MB · 空闲 CPU ≈ 0.01% 
+单文件约 9.5 MB · 后台内存约 15 MB · 空闲 CPU ≈ 0.1% 
 </div>
 
-> 📷 此处放主界面截图 + "摇杆移动光标 → 启动游戏自动暂停映射"的 GIF
 
 ## ✨ 功能特性
 -  左摇杆移动鼠标（径向死区 + 响应曲线 + 平滑），右摇杆垂直/水平滚动
@@ -37,11 +36,9 @@ PadPointer 是一款面向 Windows 10和11 的轻量级手柄桌面控制工具�
 | LS | 鼠标中键 | RS / LT / RT | 未绑定（推荐 LT = 精细移动） |
 
 ## 📥 下载与安装
-从 [Releases](https://github.com/MXWF0/PadPointer/releases) 下载（附 SHA256 校验值）：
+从 [Releases](https://github.com/MXWF0/PadPointer/releases) 下载：
 - **安装版** `Setup.exe`：当前用户安装，无需管理员权限，含开始菜单与卸载项
 - **便携版** `Portable.zip`：**完整解压**后运行 `PadPointer.exe`，配置保存在 exe 旁的 `data\` 目录
-
-> ⚠️ 首次运行若出现 SmartScreen 提示：本程序未购买代码签名证书，点击"更多信息 → 仍要运行"。源码完全公开，可自行构建核对。
 
 配置与日志位置：安装版 `%APPDATA%\PadPointer\`，便携版 `exe目录\data\`。
 
@@ -62,8 +59,6 @@ PadPointer 是一款面向 Windows 10和11 的轻量级手柄桌面控制工具�
 | 按下触发 | 每次按下触发一次动作（组合键、滚轮等） |
 | 手势 | 同一按键区分单击 / 双击 / 长按 / 持续按住 |
 
-> 手势模式下若绑定了双击，单击需等待"双击间隔"（默认 260ms）确认后才触发；追求零延迟请用原生模式。长按阈值默认 500ms，均可调整。
-
 ## ⚙️ 参数调优
 | 参数 | 默认 | 范围 | 说明 |
 |---|---|---|---|
@@ -77,7 +72,7 @@ PadPointer 是一款面向 Windows 10和11 的轻量级手柄桌面控制工具�
 💡 建议关闭 Windows"提高指针精确度"（设置 → 鼠标 → 其他鼠标选项 → 指针选项），手感更一致。
 
 ## 🎮 手柄兼容性
-- ✅ Xbox 360 / One / Series 及一切 XInput 兼容手柄（含多数国产手柄的 XInput 模式）
+- ✅ Xbox 360 及绝大部分 XInput 兼容手柄
 - ⚠️ PS / Switch Pro 手柄需先经 DS4Windows、Steam Input 等虚拟为 XInput 设备
 - ⚠️ Xbox 指南键被系统保留，XInput 无法读取
 
