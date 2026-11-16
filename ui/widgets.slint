@@ -1,0 +1,647 @@
+// Reusable Fluent-styled building blocks for PadPointer.
+//
+// Stock Slint widgets (Button, ComboBox, LineEdit, Slider, Switch, ScrollView)
+// already implement the WinUI 3 control set, so this file only adds the
+// surfaces and layout primitives that the standard widget library does not
+// provide: cards, navigation items, settings rows and readout tiles.
+
+import { Button, Slider, Switch } from "std-widgets.slint";
+import { Colors } from "theme.slint";
+
+export enum Tone {
+    neutral,
+    accent,
+    positive,
+    caution,
+}
+
+export component FocusRing inherits Rectangle {
+    border-radius: 4px;
+    border-width: 2px;
+    border-color: Colors.focus-outer;
+
+    Rectangle {
+        x: 2px;
+        y: 2px;
+        width: parent.width - 4px;
+        height: parent.height - 4px;
+        border-radius: max(0px, parent.border-radius - 2px);
+        border-width: 1px;
+        border-color: Colors.focus-inner;
+    }
+}
+
+export component Chip inherits Rectangle {
+    in property <string> text;
+    in property <Tone> tone: Tone.neutral;
+
+    property <brush> fill: root.tone == Tone.accent ? Colors.accent : root.tone == Tone.positive ? Colors.ok.with-alpha(0.16) : root.tone == Tone.caution ? Colors.warn.with-alpha(0.16) : Colors.band;
+    property <brush> line: root.tone == Tone.neutral ? Colors.stroke : root.tone == Tone.accent ? transparent : root.tone == Tone.positive ? Colors.ok.with-alpha(0.28) : Colors.warn.with-alpha(0.28);
+    property <brush> label: root.tone == Tone.accent ? Colors.accent-ink : root.tone == Tone.positive ? Colors.ok : root.tone == Tone.caution ? Colors.warn : Colors.ink-secondary;
+
+    height: 24px;
+    border-radius: 12px;
+    background: root.fill;
+    border-width: 1px;
+    border-color: root.line;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+
+        Text {
+            text: root.text;
+            font-size: 12px;
+            color: root.label;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component Section inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle: "";
+    in property <string> badge: "";
+    in property <Tone> badge-tone: Tone.neutral;
+    in property <string> action: "";
+    in property <image> action-icon;
+    in property <bool> action-primary: false;
+    callback action-clicked;
+
+    background: Colors.card;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: Colors.stroke;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+
+    VerticalLayout {
+        padding: 20px;
+        spacing: 16px;
+
+        HorizontalLayout {
+            spacing: 12px;
+
+            VerticalLayout {
+                spacing: 3px;
+                horizontal-stretch: 1;
+                alignment: center;
+
+                Text {
+                    text: root.title;
+                    color: Colors.ink;
+                    font-size: 16px;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                }
+
+                if root.subtitle != "" : Text {
+                    text: root.subtitle;
+                    color: Colors.ink-tertiary;
+                    font-size: 12px;
+                    wrap: word-wrap;
+                }
+            }
+
+            if root.badge != "" || root.action != "" : HorizontalLayout {
+                spacing: 8px;
+
+                if root.badge != "" : Chip {
+                    text: root.badge;
+                    tone: root.badge-tone;
+                }
+
+                if root.action != "" : Button {
+                    text: root.action;
+                    icon: root.action-icon;
+                    colorize-icon: true;
+                    primary: root.action-primary;
+                    clicked => { root.action-clicked(); }
+                }
+            }
+        }
+
+        @children
+    }
+}
+
+export component NavItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <bool> selected: false;
+    callback clicked;
+
+    height: 40px;
+    border-radius: 4px;
+    background: root.selected ? Colors.selected : touch.pressed ? Colors.pressed : touch.has-hover ? Colors.hover : transparent;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+
+    Rectangle {
+        visible: root.selected;
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: 3px;
+        height: 16px;
+        border-radius: 2px;
+        background: Colors.accent;
+    }
+
+    Image {
+        x: 12px;
+        y: (root.height - self.height) / 2;
+        width: 16px;
+        height: 16px;
+        source: root.icon;
+        colorize: root.selected ? Colors.ink : Colors.ink-secondary;
+    }
+
+    Text {
+        x: 40px;
+        width: root.width - 52px;
+        height: root.height;
+        text: root.text;
+        color: root.selected ? Colors.ink : Colors.ink-secondary;
+        font-size: 14px;
+        font-weight: root.selected ? 700 : 400;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        clicked => {
+            focus.focus();
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+
+    if focus.has-focus : FocusRing {
+        border-radius: root.border-radius;
+    }
+}
+
+export component StatusDot inherits Rectangle {
+    in property <color> tone: Colors.ok;
+
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: root.tone;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Colors.divider;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+}
+
+export component IconButton inherits Rectangle {
+    in property <image> icon;
+    in property <string> label;
+    in property <length> glyph: 14px;
+    callback clicked;
+
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    background: touch.pressed ? Colors.pressed : touch.has-hover ? Colors.hover : transparent;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.clicked(); }
+
+    Image {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: root.glyph;
+        height: root.glyph;
+        source: root.icon;
+        colorize: Colors.ink-tertiary;
+        accessible-role: none;
+    }
+
+    touch := TouchArea {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        clicked => {
+            focus.focus();
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+
+    if focus.has-focus : FocusRing {
+        border-radius: root.border-radius;
+    }
+}
+
+export component InfoBar inherits Rectangle {
+    in property <string> message;
+    in property <bool> warning: false;
+    in property <image> icon;
+    callback closed;
+
+    border-radius: 4px;
+    background: Colors.card;
+    border-width: 1px;
+    border-color: Colors.stroke;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 8px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 10px;
+
+        Image {
+            width: 16px;
+            height: 16px;
+            source: root.icon;
+            colorize: root.warning ? Colors.warn : Colors.accent;
+        }
+
+        Text {
+            text: root.message;
+            font-size: 13px;
+            color: Colors.ink;
+            wrap: word-wrap;
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+        }
+
+        IconButton {
+            icon: @image-url("../assets/icons/close.svg");
+            label: "关闭提示";
+            glyph: 12px;
+            clicked => { root.closed(); }
+        }
+    }
+}
+
+// A WinUI "settings card" row: title and description on the left, control on
+// the right. Pass exactly one child (usually a HorizontalLayout of controls).
+export component SettingsRow inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle: "";
+
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-top: 10px;
+        padding-bottom: 10px;
+        spacing: 16px;
+
+        VerticalLayout {
+            spacing: 2px;
+            horizontal-stretch: 1;
+            alignment: center;
+
+            Text {
+                text: root.title;
+                color: Colors.ink;
+                font-size: 14px;
+            }
+
+            if root.subtitle != "" : Text {
+                text: root.subtitle;
+                color: Colors.ink-tertiary;
+                font-size: 12px;
+                wrap: word-wrap;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+            @children
+        }
+    }
+}
+
+export component SliderRow inherits Rectangle {
+    in property <string> title;
+    in property <string> unit: "";
+    in property <float> value;
+    in property <float> low;
+    in property <float> high;
+    in property <float> step;
+    callback changed(float);
+
+    height: 48px;
+    horizontal-stretch: 1;
+
+    VerticalLayout {
+        alignment: center;
+
+        HorizontalLayout {
+            spacing: 16px;
+
+            Text {
+                text: root.title;
+                width: 116px;
+                color: Colors.ink;
+                font-size: 13px;
+                vertical-alignment: center;
+            }
+
+            Slider {
+                minimum: root.low;
+                maximum: root.high;
+                step: root.step;
+                value: root.value;
+                horizontal-stretch: 1;
+                changed(v) => { root.changed(v); }
+            }
+
+            Text {
+                text: Math.round(root.value * 100) / 100 + root.unit;
+                width: 92px;
+                horizontal-alignment: right;
+                color: Colors.ink-secondary;
+                font-size: 13px;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component SwitchRow inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle: "";
+    in property <bool> checked;
+    callback toggled(bool);
+
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+
+    SettingsRow {
+        title: root.title;
+        subtitle: root.subtitle;
+
+        Switch {
+            checked: root.checked;
+            text: "";
+            accessible-label: root.title;
+            toggled => { root.toggled(self.checked); }
+        }
+    }
+}
+
+export component BindingRow inherits Rectangle {
+    in property <string> key-name;
+    in property <string> binding;
+    in property <bool> selected: false;
+    callback clicked;
+
+    height: 34px;
+    border-radius: 4px;
+    background: root.selected ? Colors.selected : touch.pressed ? Colors.pressed : touch.has-hover ? Colors.hover : transparent;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.key-name + "：" + root.binding;
+    accessible-action-default => { root.clicked(); }
+
+    Rectangle {
+        visible: root.selected;
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: 3px;
+        height: 16px;
+        border-radius: 2px;
+        background: Colors.accent;
+    }
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 10px;
+        spacing: 10px;
+
+        Text {
+            text: root.key-name;
+            width: 56px;
+            color: root.selected ? Colors.ink : Colors.ink-secondary;
+            font-size: 12px;
+            font-weight: 700;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.binding;
+            horizontal-stretch: 1;
+            color: Colors.ink;
+            font-size: 12px;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    touch := TouchArea {
+        clicked => {
+            focus.focus();
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.clicked();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+
+    if focus.has-focus : FocusRing {
+        border-radius: root.border-radius;
+    }
+}
+
+export component StickTile inherits Rectangle {
+    in property <string> label;
+    in property <float> sx;
+    in property <float> sy;
+
+    height: 64px;
+    border-radius: 6px;
+    background: Colors.well;
+    border-width: 1px;
+    border-color: Colors.stroke;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 12px;
+
+        Rectangle {
+            width: 38px;
+            height: 38px;
+            border-radius: 19px;
+            background: Colors.window;
+            border-width: 1px;
+            border-color: Colors.stroke;
+
+            Rectangle {
+                width: 8px;
+                height: 8px;
+                border-radius: 4px;
+                background: Colors.accent;
+                x: (parent.width - self.width) / 2 + root.sx * 13px;
+                y: (parent.height - self.height) / 2 - root.sy * 13px;
+            }
+        }
+
+        Text {
+            text: root.label;
+            font-size: 12px;
+            color: Colors.ink-tertiary;
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: "X " + Math.round(root.sx * 100) / 100 + "   Y " + Math.round(root.sy * 100) / 100;
+            font-size: 12px;
+            color: Colors.ink;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component TriggerTile inherits Rectangle {
+    in property <string> label;
+    in property <float> value;
+
+    height: 64px;
+    border-radius: 6px;
+    background: Colors.well;
+    border-width: 1px;
+    border-color: Colors.stroke;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+
+    VerticalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 9px;
+        alignment: center;
+
+        HorizontalLayout {
+            Text {
+                text: root.label;
+                font-size: 12px;
+                color: Colors.ink-tertiary;
+                horizontal-stretch: 1;
+            }
+
+            Text {
+                text: Math.round(root.value * 100) + "%";
+                font-size: 12px;
+                color: Colors.ink-secondary;
+            }
+        }
+
+        Rectangle {
+            height: 6px;
+            border-radius: 3px;
+            background: Colors.window;
+
+            Rectangle {
+                width: parent.width * clamp(root.value, 0, 1);
+                height: 100%;
+                border-radius: 3px;
+                background: Colors.accent;
+            }
+        }
+    }
+}
+
+export component EmptyState inherits Rectangle {
+    in property <image> icon;
+    in property <string> title;
+    in property <string> detail: "";
+
+    background: transparent;
+    horizontal-stretch: 1;
+    vertical-stretch: 0;
+
+    VerticalLayout {
+        padding-top: 28px;
+        padding-bottom: 28px;
+        spacing: 8px;
+
+        HorizontalLayout {
+            alignment: center;
+
+            Image {
+                width: 26px;
+                height: 26px;
+                source: root.icon;
+                colorize: Colors.ink-tertiary;
+            }
+        }
+
+        Text {
+            text: root.title;
+            font-size: 14px;
+            color: Colors.ink-secondary;
+            horizontal-alignment: center;
+        }
+
+        if root.detail != "" : Text {
+            text: root.detail;
+            font-size: 12px;
+            color: Colors.ink-tertiary;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}
+
+

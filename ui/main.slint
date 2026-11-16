@@ -1,0 +1,1241 @@
+// PadPointer main window.
+//
+// Layout follows the Windows 11 "NavigationView" pattern: a navigation pane on
+// the left, a page header with a title and a one-line description, and a stack
+// of cards that hold one topic each. Controls are the stock Slint widgets so
+// they keep the native Fluent states, focus rings and accessibility support.
+
+import {
+    AboutSlint, Button, ComboBox, LineEdit, ScrollView, Switch,
+} from "std-widgets.slint";
+import { Colors } from "theme.slint";
+import {
+    BindingRow, Chip, Divider, EmptyState, IconButton, InfoBar, NavItem,
+    Section, SettingsRow, SliderRow, StatusDot, StickTile, SwitchRow, Tone, TriggerTile,
+} from "widgets.slint";
+
+export { Colors } from "theme.slint";
+
+export struct PadKey { name: string, binding: string, x: float, y: float, pressed: bool }
+export struct GameRow { name: string, path: string, enabled: bool, rule: int, match-label: string }
+export struct Setting { title: string, value: float, low: float, high: float, step: float, unit: string }
+
+// A labelled control used inside the binding editor.
+component Field inherits VerticalLayout {
+    in property <string> label;
+    spacing: 4px;
+
+    Text {
+        text: root.label;
+        color: Colors.ink-tertiary;
+        font-size: 12px;
+        vertical-alignment: center;
+    }
+
+    @children
+}
+
+// One button on the controller illustration.
+component KeyCap inherits Rectangle {
+    in property <string> label;
+    in property <string> binding;
+    in property <bool> pressed: false;
+    in property <bool> selected: false;
+    callback picked;
+
+    width: 34px;
+    height: 26px;
+    border-radius: 6px;
+    background: root.pressed ? Colors.accent : Colors.pad-chip;
+    border-width: root.selected ? 2px : 1px;
+    border-color: root.pressed ? Colors.accent : root.selected ? Colors.accent : Colors.pad-stroke;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-description: root.binding;
+    accessible-action-default => { root.picked(); }
+
+    Text {
+        text: root.label;
+        color: root.pressed ? Colors.accent-ink : Colors.ink;
+        font-size: 11px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        clicked => {
+            focus.focus();
+            root.picked();
+        }
+    }
+
+    focus := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.picked();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+
+    if focus.has-focus : Rectangle {
+        border-width: 2px;
+        border-radius: parent.border-radius;
+        border-color: Colors.focus-outer;
+    }
+}
+
+// The controller drawing is a vector so it follows the light and dark theme.
+component ControllerFigure inherits Rectangle {
+    in property <[PadKey]> keys;
+    in property <int> selected: -1;
+    callback picked(int);
+
+    height: self.width * 0.43846;
+    background: transparent;
+
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 520;
+        viewbox-height: 228;
+        commands: "M119 30Q144 20 181 29L339 29Q376 20 401 30Q432 34 453 65L479 153Q497 209 466 216Q448 224 423 199L374 153Q360 142 341 145H179Q160 142 146 153L97 199Q72 224 54 216Q23 209 41 153L67 65Q88 34 119 30Z";
+        fill: Colors.pad-body;
+        stroke: Colors.pad-stroke;
+        stroke-width: 2px;
+    }
+
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-width: 520;
+        viewbox-height: 228;
+        commands: "M82 48Q106 24 153 31M367 31Q414 24 438 48M185 134H335";
+        fill: transparent;
+        stroke: Colors.pad-stroke;
+        stroke-width: 2px;
+    }
+
+    Rectangle {
+        width: 58px;
+        height: 58px;
+        border-radius: 29px;
+        x: root.width * 0.227 - self.width / 2;
+        y: root.height * 0.355 - self.height / 2;
+        background: Colors.pad-well;
+        border-width: 1px;
+        border-color: Colors.pad-stroke;
+    }
+
+    Rectangle {
+        width: 58px;
+        height: 58px;
+        border-radius: 29px;
+        x: root.width * 0.625 - self.width / 2;
+        y: root.height * 0.603 - self.height / 2;
+        background: Colors.pad-well;
+        border-width: 1px;
+        border-color: Colors.pad-stroke;
+    }
+
+    Rectangle {
+        width: 34px;
+        height: 34px;
+        border-radius: 17px;
+        x: root.width * 0.5 - self.width / 2;
+        y: root.height * 0.215 - self.height / 2;
+        background: Colors.pad-well;
+        border-width: 1px;
+        border-color: Colors.pad-stroke;
+
+        Path {
+            width: 34px;
+            height: 34px;
+            viewbox-width: 34;
+            viewbox-height: 34;
+            commands: "M12.5 12.5L21.5 21.5M21.5 12.5L12.5 21.5";
+            stroke: Colors.pad-stroke;
+            stroke-width: 1.4px;
+        }
+    }
+
+    for key[index] in root.keys : KeyCap {
+        width: (index <= 3) ? 30px : (index == 6 || index == 7) ? 42px : 34px;
+        height: (index <= 3 || index == 12 || index == 13) ? self.width : 26px;
+        border-radius: (index <= 3 || index == 12 || index == 13) ? self.width / 2 : 6px;
+        x: root.width * key.x - self.width / 2;
+        y: root.height * key.y - self.height / 2;
+        label: key.name;
+        binding: key.binding;
+        pressed: key.pressed;
+        selected: root.selected == index;
+        picked => { root.picked(index); }
+    }
+}
+
+export component PadTray inherits SystemTrayIcon {
+    icon: @image-url("../assets/padpointer.svg");
+    tooltip: "PadPointer";
+    clicked => { root.command(0); }
+    callback command(int);
+    Menu {
+        MenuItem { title: "打开主界面"; activated => { root.command(0); } }
+        MenuSeparator { }
+        MenuItem { title: "启用映射"; activated => { root.command(1); } }
+        MenuItem { title: "暂停映射"; activated => { root.command(2); } }
+        MenuSeparator { }
+        MenuItem { title: "自动模式"; activated => { root.command(3); } }
+        MenuItem { title: "桌面模式"; activated => { root.command(4); } }
+        MenuItem { title: "游戏模式"; activated => { root.command(5); } }
+        MenuSeparator { }
+        MenuItem { title: "设置"; activated => { root.command(6); } }
+        MenuItem { title: "退出程序"; activated => { root.command(7); } }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "PadPointer";
+    icon: @image-url("../assets/padpointer.svg");
+    min-width: 880px;
+    min-height: 520px;
+    preferred-width: 1180px;
+    preferred-height: 800px;
+    default-font-family: "Microsoft YaHei UI";
+    background: Colors.window;
+
+    in-out property <int> page;
+    in property <string> controller-name: "正在检测";
+    in property <bool> connected: false;
+    in property <string> mode-label: "桌面模式";
+    in property <int> policy;
+    in property <bool> paused;
+    in property <bool> mapping-enabled;
+    in property <string> profile;
+    in property <string> detection;
+    in property <string> speed-label;
+    in property <string> notice;
+    in property <string> system-status;
+    in property <string> storage;
+    in property <string> version;
+    in property <[PadKey]> keys;
+    in property <float> lx;
+    in property <float> ly;
+    in property <float> rx;
+    in property <float> ry;
+    in property <float> lt;
+    in property <float> rt;
+    in-out property <int> selected;
+    in-out property <int> edit-mode;
+    in-out property <int> gesture;
+    in-out property <int> action-index;
+    in-out property <string> action-text;
+    in property <string> mapping-summary;
+    in property <[GameRow]> games;
+    in property <[string]> processes;
+    in-out property <int> process-index: -1;
+    in property <[Setting]> sliders;
+    in property <[string]> slots;
+    in property <int> slot-index;
+    in property <int> theme-index;
+    in property <bool> automatic-at-start;
+    in property <bool> close-to-tray;
+    in property <bool> start-hidden;
+    in property <bool> startup-enabled;
+    in-out property <string> hotkey-text;
+    callback pause(bool);
+    callback select-policy(int);
+    callback select-key(int);
+    callback select-gesture(int);
+    callback save-binding(int, int, string);
+    callback clear-binding();
+    callback reset-bindings();
+    callback recorded(string,int,bool,bool,bool,bool);
+    callback game-file();
+    callback scan-processes();
+    callback add-process(int);
+    callback change-game(int,string,bool,int);
+    callback delete-game(int);
+    callback change-setting(int,float);
+    callback change-option(int,int);
+    callback save-hotkey(string);
+    callback exchange(bool);
+    callback open-folder();
+    callback exit-app();
+
+    // Dismissed banners stay hidden until the text changes again.
+    private property <bool> notice-closed: false;
+    private property <bool> status-closed: false;
+    changed notice => { notice-closed = false; }
+    changed system-status => { status-closed = false; }
+
+    private property <string> page-title: root.page == 0 ? "控制台" : root.page == 1 ? "按键映射" : root.page == 2 ? "游戏管理" : root.page == 3 ? "设置" : "关于";
+    private property <string> page-subtitle: root.page == 0 ? "查看手柄状态与当前映射方式。" :
+        root.page == 1 ? "把 16 个标准按键映射为鼠标或键盘动作。" :
+        root.page == 2 ? "进入这些游戏时自动暂停桌面映射。" :
+        root.page == 3 ? "调整指针速度、手势判定与启动行为。" :
+        "版本信息、数据位置与许可说明。";
+
+    HorizontalLayout {
+        spacing: 0;
+
+        // ---------- Navigation pane ----------
+        Rectangle {
+            width: 178px;
+            background: Colors.pane;
+
+            Rectangle {
+                x: parent.width - 1px;
+                width: 1px;
+                height: 100%;
+                background: Colors.divider;
+            }
+
+            VerticalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                padding-top: 14px;
+                padding-bottom: 12px;
+                spacing: 2px;
+
+                Rectangle {
+                    height: 44px;
+
+                    Image {
+                        x: 7px;
+                        y: (parent.height - self.height) / 2;
+                        width: 26px;
+                        height: 26px;
+                        source: @image-url("../assets/padpointer.svg");
+                    }
+
+                    Text {
+                        x: 40px;
+                        height: parent.height;
+                        text: "PadPointer";
+                        color: Colors.ink;
+                        font-size: 15px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle { height: 8px; }
+
+                NavItem {
+                    icon: @image-url("../assets/icons/home.svg");
+                    text: "首页";
+                    selected: root.page == 0;
+                    clicked => { root.page = 0; }
+                }
+
+                NavItem {
+                    icon: @image-url("../assets/icons/gamepad.svg");
+                    text: "按键映射";
+                    selected: root.page == 1;
+                    clicked => { root.page = 1; }
+                }
+
+                NavItem {
+                    icon: @image-url("../assets/icons/apps.svg");
+                    text: "游戏管理";
+                    selected: root.page == 2;
+                    clicked => { root.page = 2; }
+                }
+
+                NavItem {
+                    icon: @image-url("../assets/icons/settings.svg");
+                    text: "设置";
+                    selected: root.page == 3;
+                    clicked => { root.page = 3; }
+                }
+
+                NavItem {
+                    icon: @image-url("../assets/icons/info.svg");
+                    text: "关于";
+                    selected: root.page == 4;
+                    clicked => { root.page = 4; }
+                }
+
+                Rectangle { vertical-stretch: 1; }
+
+                Divider { }
+
+                VerticalLayout {
+                    padding-top: 8px;
+                    spacing: 8px;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+
+                        StatusDot {
+                            tone: root.paused ? Colors.warn : root.connected ? Colors.ok : Colors.ink-tertiary;
+                        }
+
+                        Text {
+                            text: root.mode-label;
+                            color: Colors.ink-secondary;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+
+                        Text {
+                            text: "v" + root.version;
+                            color: Colors.ink-tertiary;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                        }                    }
+
+                    Button {
+                        text: "退出 PadPointer";
+                        height: 32px;
+                        clicked => { root.exit-app(); }
+                    }
+                }
+            }
+        }
+
+        // ---------- Content ----------
+        Rectangle {
+            horizontal-stretch: 1;
+            background: Colors.window;
+
+            VerticalLayout {
+                width: Math.min(parent.width, 1120px);
+                x: (parent.width - self.width) / 2;
+                padding-left: 20px;
+                padding-right: self.padding-left;
+                padding-top: 22px;
+                spacing: 12px;
+
+                VerticalLayout {
+                    spacing: 2px;
+
+                    Text {
+                        text: root.page-title;
+                        color: Colors.ink;
+                        font-size: 26px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: root.page-subtitle;
+                        color: Colors.ink-secondary;
+                        font-size: 13px;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Rectangle { height: 6px; }
+
+                if root.notice != "" && !root.notice-closed : InfoBar {
+                    message: root.notice;
+                    icon: @image-url("../assets/icons/info.svg");
+                    closed => { root.notice-closed = true; }
+                }
+
+                if root.system-status != "" && !root.status-closed : InfoBar {
+                    message: root.system-status;
+                    warning: true;
+                    icon: @image-url("../assets/icons/warning.svg");
+                    closed => { root.status-closed = true; }
+                }
+
+                // ---------- Home ----------
+                if root.page == 0 : ScrollView {
+                    VerticalLayout {
+                        alignment: start;
+                        spacing: 12px;
+                        padding-right: 14px;
+                        padding-bottom: 24px;
+
+                        Section {
+                            title: root.controller-name;
+                            subtitle: root.profile + " · 指针速度 " + root.speed-label + " · " + (root.mapping-enabled ? "桌面映射开启" : "桌面映射关闭");
+                            badge: root.paused ? "已暂停" : root.connected ? "已连接" : "未连接";
+                            badge-tone: root.paused ? Tone.caution : root.connected ? Tone.positive : Tone.neutral;
+                            action: root.paused ? "启用映射" : "暂停映射";
+                            action-icon: root.paused ? @image-url("../assets/icons/play.svg") : @image-url("../assets/icons/pause.svg");
+                            action-primary: !root.paused;
+                            action-clicked => { root.pause(!root.paused); }
+
+                            Divider { }
+
+                            HorizontalLayout {
+                                spacing: 16px;
+
+                                VerticalLayout {
+                                    width: 276px;
+                                    spacing: 6px;
+
+                                    Text {
+                                        text: "识别策略";
+                                        color: Colors.ink-tertiary;
+                                        font-size: 12px;
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: 4px;
+                                        for option[index] in ["自动识别", "强制桌面", "强制游戏"] : Button {
+                                            text: option;
+                                            primary: root.policy == index;
+                                            horizontal-stretch: 1;
+                                            clicked => { if root.policy != index { root.select-policy(index); } }
+                                        }
+                                    }
+                                }
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    spacing: 6px;
+
+                                    Text {
+                                        text: "自动切换";
+                                        color: Colors.ink-tertiary;
+                                        font-size: 12px;
+                                    }
+
+                                    Text {
+                                        text: root.policy == 1 ? "强制桌面模式可能在游戏中产生键鼠操作。" : root.detection;
+                                        color: Colors.ink-secondary;
+                                        font-size: 13px;
+                                        wrap: word-wrap;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+                        }
+
+                        Section {
+                            title: "实时输入";
+                            subtitle: "点击手柄图中的按键，可直接编辑它的映射。";
+
+                            HorizontalLayout {
+                                alignment: center;
+
+                                ControllerFigure {
+                                    width: 480px;
+                                    keys: root.keys;
+                                    picked(index) => {
+                                        root.select-key(index);
+                                        root.page = 1;
+                                    }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+
+                                StickTile {
+                                    label: "左摇杆";
+                                    sx: root.lx;
+                                    sy: root.ly;
+                                    horizontal-stretch: 1;
+                                }
+
+                                StickTile {
+                                    label: "右摇杆";
+                                    sx: root.rx;
+                                    sy: root.ry;
+                                    horizontal-stretch: 1;
+                                }
+
+                                TriggerTile {
+                                    label: "LT";
+                                    value: root.lt;
+                                    horizontal-stretch: 1;
+                                }
+
+                                TriggerTile {
+                                    label: "RT";
+                                    value: root.rt;
+                                    horizontal-stretch: 1;
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+
+                                Image {
+                                    width: 14px;
+                                    height: 14px;
+                                    source: @image-url("../assets/icons/keyboard.svg");
+                                    colorize: Colors.ink-tertiary;
+                                }
+
+                                Text {
+                                    text: root.hotkey-text + " 暂停 / 恢复映射";
+                                    color: Colors.ink-tertiary;
+                                    font-size: 12px;
+                                    vertical-alignment: center;
+                                }
+
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+                        }
+                    }
+                }
+
+                // ---------- Button mapping ----------
+                if root.page == 1 : ScrollView {
+                    VerticalLayout {
+                        alignment: start;
+                        spacing: 12px;
+                        padding-right: 14px;
+                        padding-bottom: 24px;
+
+                        Section {
+                            title: "键位图示";
+                            subtitle: "点击图中的按键，或从下方键位列表选择。";
+                            action: "恢复默认键位";
+                            action-clicked => { root.reset-bindings(); }
+
+                            HorizontalLayout {
+                                alignment: center;
+
+                                ControllerFigure {
+                                    width: 480px;
+                                    keys: root.keys;
+                                    selected: root.selected;
+                                    picked(index) => { root.select-key(index); }
+                                }
+                            }
+                        }
+
+                        Section {
+                            title: "编辑绑定";
+                            subtitle: "当前绑定  " + root.mapping-summary;
+
+                            Field {
+                                label: "触发方式";
+
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    alignment: start;
+                                    for option[index] in ["按住与释放", "按下时执行", "高级手势"] : Button {
+                                        text: option;
+                                        primary: root.edit-mode == index;
+                                        clicked => {
+                                            if root.edit-mode != index {
+                                                root.edit-mode = index;
+                                                root.select-gesture(index == 2 ? 0 : 4);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 12px;
+
+                                if root.edit-mode == 2 : Field {
+                                    label: "手势";
+                                    min-width: 130px; horizontal-stretch: 1;
+
+                                    ComboBox {
+                                        model: ["单击", "双击", "长按触发", "长按后持续"];
+                                        current-index: root.gesture;
+                                        selected => { root.select-gesture(self.current-index); }
+                                    }
+                                }
+
+                                Field {
+                                    label: "动作";
+                                    preferred-width: 276px;
+
+                                    ComboBox {
+                                        model: ["无操作", "鼠标左键", "鼠标右键", "鼠标中键", "鼠标左键双击", "鼠标右键双击", "鼠标中键双击", "垂直滚轮", "水平滚轮", "键盘／组合键", "精细移动", "快速移动", "暂停映射"];
+                                        current-index <=> root.action-index;
+                                    }
+                                }
+
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+
+                            if root.action-index == 7 || root.action-index == 8 || root.action-index == 9 : HorizontalLayout {
+                                spacing: 12px;
+
+                                Field {
+                                    label: root.action-index == 9 ? "组合键" : "滚轮步数";
+                                    width: 430px;
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+
+                                        LineEdit {
+                                            text <=> root.action-text;
+                                            placeholder-text: root.action-index == 9 ? "例如 Ctrl + C" : "步数，例如 -3";
+                                            horizontal-stretch: 1;
+                                        }
+
+                                        if root.action-index == 9 : Button {
+                                            text: capture.has-focus ? "按下快捷键…" : "录制";
+                                            clicked => { capture.focus(); }
+                                        }
+                                    }
+                                }
+
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+
+                                Button {
+                                    text: "保存绑定";
+                                    primary: true;
+                                    icon: @image-url("../assets/icons/check.svg");
+                                    colorize-icon: true;
+                                    clicked => {
+                                        root.save-binding(root.edit-mode, root.action-index, root.action-text);
+                                        capture.clear-focus();
+                                    }
+                                }
+
+                                Button {
+                                    text: "清空该按键";
+                                    clicked => { root.clear-binding(); }
+                                }
+
+                                Button {
+                                    text: "手势时间设置";
+                                    clicked => { root.page = 3; }
+                                }
+
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+
+                            Text {
+                                text: root.edit-mode == 2
+                                    ? "每种手势单独保存。设置双击动作后，单击会等待双击间隔结束。"
+                                    : root.edit-mode == 1 ? "手柄按下时执行一次，适合组合键、双击和滚轮。"
+                                    : "动作持续到松开手柄按键。将 A 绑定到鼠标左键可拖拽窗口。";
+                                color: Colors.ink-tertiary;
+                                font-size: 12px;
+                                wrap: word-wrap;
+                            }
+
+                            capture := FocusScope {
+                                width: 0px;
+                                height: 0px;
+                                focus-on-tab-navigation: false;
+
+                                key-pressed(event) => {
+                                    root.recorded(event.text, event.text == Key.LeftArrow ? 37 : event.text == Key.UpArrow ? 38 :
+                                        event.text == Key.RightArrow ? 39 : event.text == Key.DownArrow ? 40 :
+                                        event.text == Key.Tab ? 9 : event.text == Key.Return ? 13 : event.text == Key.Escape ? 27 :
+                                        event.text == Key.Backspace ? 8 : event.text == Key.Delete ? 46 :
+                                        event.text == Key.Home ? 36 : event.text == Key.End ? 35 :
+                                        event.text == Key.PageUp ? 33 : event.text == Key.PageDown ? 34 :
+                                        event.text == Key.Insert ? 45 : 0,
+                                        event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta);
+                                    accept
+                                }
+                            }
+                        }
+
+                        Section {
+                            title: "当前键位";
+                            subtitle: "全部绑定一览，点击任意一行即可编辑。";
+
+                            HorizontalLayout {
+                                spacing: 8px;
+
+                                for column in 2 : VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    spacing: 2px;
+
+                                    for row in 8 : BindingRow {
+                                        key-name: root.keys[column * 8 + row].name;
+                                        binding: root.keys[column * 8 + row].binding;
+                                        selected: root.selected == column * 8 + row;
+                                        clicked => { root.select-key(column * 8 + row); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ---------- Games ----------
+                if root.page == 2 : ScrollView {
+                    VerticalLayout {
+                        alignment: start;
+                        spacing: 12px;
+                        padding-right: 14px;
+                        padding-bottom: 24px;
+
+                        Section {
+                            title: "添加游戏";
+                            subtitle: "自动模式会在这些游戏进入前台时暂停桌面映射。";
+
+                            HorizontalLayout {
+                                spacing: 8px;
+
+                                Button {
+                                    text: "选择游戏 EXE";
+                                    primary: true;
+                                    icon: @image-url("../assets/icons/add.svg");
+                                    colorize-icon: true;
+                                    clicked => { root.game-file(); }
+                                }
+
+                                Button {
+                                    text: "扫描运行进程";
+                                    icon: @image-url("../assets/icons/refresh.svg");
+                                    colorize-icon: true;
+                                    clicked => { root.scan-processes(); }
+                                }
+
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+
+                            if root.processes.length > 0 : HorizontalLayout {
+                                spacing: 8px;
+
+                                ComboBox {
+                                    model: root.processes;
+                                    current-index <=> root.process-index;
+                                    horizontal-stretch: 1;
+                                }
+
+                                Button {
+                                    text: "添加选中进程";
+                                    enabled: root.process-index >= 0;
+                                    clicked => { root.add-process(root.process-index); }
+                                }
+                            }
+
+                            Text {
+                                text: "识别到已启用的游戏进入前台时，自动模式会暂停手柄键鼠映射；回到桌面后自动恢复。";
+                                color: Colors.ink-tertiary;
+                                font-size: 12px;
+                                wrap: word-wrap;
+                            }
+                        }
+
+                        Section {
+                            title: "游戏列表";
+                            subtitle: root.games.length == 0 ? "" : root.games.length + " 个游戏规则";
+
+                            VerticalLayout {
+                                spacing: 0;
+
+                                if root.games.length == 0 : EmptyState {
+                                    icon: @image-url("../assets/icons/apps.svg");
+                                    title: "还没有添加游戏";
+                                    detail: "选择一个 EXE，或从正在运行的进程中挑选。";
+                                }
+
+                                for game[index] in root.games : VerticalLayout {
+                                    spacing: 0;
+
+                                    if index > 0 : Divider { }
+
+                                    VerticalLayout {
+                                        padding-top: 12px;
+                                        padding-bottom: 12px;
+                                        spacing: 10px;
+
+                                        HorizontalLayout {
+                                            spacing: 12px;
+
+                                            game-name := LineEdit {
+                                                text: game.name;
+                                                min-width: 120px; horizontal-stretch: 1;
+                                            }
+
+                                            Chip {
+                                                text: game.match-label;
+                                                tone: game.match-label == "前台已匹配" ? Tone.positive : Tone.neutral;
+                                            }
+
+                                            Rectangle { horizontal-stretch: 1; }
+
+                                            enabled-game := Switch {
+                                                checked: game.enabled;
+                                                text: "自动切换";
+                                                accessible-label: "自动切换 " + game.name;
+                                                toggled => {
+                                                    root.change-game(index, game-name.text, self.checked, rule.current-index);
+                                                }
+                                            }
+
+                                            IconButton {
+                                                icon: @image-url("../assets/icons/trash.svg");
+                                                label: "删除 " + game.name;
+                                                clicked => { root.delete-game(index); }
+                                            }
+                                        }
+
+                                        HorizontalLayout {
+                                            spacing: 12px;
+
+                                            Text {
+                                                text: game.path;
+                                                color: Colors.ink-tertiary;
+                                                font-size: 12px;
+                                                horizontal-stretch: 1;
+                                                vertical-alignment: center;
+                                                overflow: elide;
+                                            }
+
+                                            rule := ComboBox {
+                                                model: ["匹配完整路径", "匹配 EXE 文件名"];
+                                                current-index: game.rule;
+                                                width: 170px;
+                                            }
+
+                                            Button {
+                                                text: "保存";
+                                                clicked => {
+                                                    root.change-game(index, game-name.text, enabled-game.checked, rule.current-index);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ---------- Settings ----------
+                if root.page == 3 : ScrollView {
+                    VerticalLayout {
+                        alignment: start;
+                        spacing: 12px;
+                        padding-right: 14px;
+                        padding-bottom: 24px;
+
+                        Section {
+                            title: "鼠标移动与滚动";
+                            subtitle: "调整速度、死区和摇杆响应。";
+
+                            VerticalLayout {
+                                spacing: 0;
+
+                                for index in 7 : VerticalLayout {
+                                    spacing: 0;
+
+                                    if index > 0 : Divider { }
+
+                                    SliderRow {
+                                        title: root.sliders[index].title;
+                                        unit: root.sliders[index].unit;
+                                        value: root.sliders[index].value;
+                                        low: root.sliders[index].low;
+                                        high: root.sliders[index].high;
+                                        step: root.sliders[index].step;
+                                        changed(value) => { root.change-setting(index, value); }
+                                    }
+                                }
+                            }
+                        }
+
+                        Section {
+                            title: "按键手势与轮询";
+                            subtitle: "设定长按、双击的判定时间，以及手柄状态的读取间隔。";
+
+                            VerticalLayout {
+                                spacing: 0;
+                                for row in 3 : VerticalLayout {
+                                    if row > 0 : Divider { }
+
+                                    SliderRow {
+                                        title: root.sliders[row + 7].title;
+                                        unit: root.sliders[row + 7].unit;
+                                        value: root.sliders[row + 7].value;
+                                        low: root.sliders[row + 7].low;
+                                        high: root.sliders[row + 7].high;
+                                        step: root.sliders[row + 7].step;
+                                        changed(value) => { root.change-setting(row + 7, value); }
+                                    }
+                                }
+                            }
+                        }
+
+                        Section {
+                            title: "手柄与自动切换";
+                            subtitle: "选择手柄、启动模式与全局热键。";
+
+                            VerticalLayout {
+                                spacing: 0;
+
+                                SettingsRow {
+                                    title: "手柄槽位";
+                                    subtitle: "指定 XInput 槽位，或让程序自动选择。";
+
+                                    ComboBox {
+                                        model: root.slots;
+                                        current-index: root.slot-index;
+                                        width: 240px;
+                                        selected => { root.change-option(0, self.current-index); }
+                                    }
+                                }
+
+                                Divider { }
+
+                                SettingsRow {
+                                    title: "启动时的模式";
+                                    subtitle: "决定启动后立即识别前台窗口，还是固定使用桌面模式。";
+
+                                    ComboBox {
+                                        model: ["启动时自动识别", "启动时使用桌面模式"];
+                                        current-index: root.automatic-at-start ? 0 : 1;
+                                        preferred-width: 276px;
+                                        selected => { root.change-option(5, self.current-index); }
+                                    }
+                                }
+
+                                Divider { }
+
+                                SettingsRow {
+                                    title: "启用／暂停热键";
+                                    subtitle: "在任意窗口中临时切换映射。";
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+
+                                        LineEdit {
+                                            text <=> root.hotkey-text;
+                                            width: 170px;
+                                        }
+
+                                        Button {
+                                            text: "注册热键";
+                                            icon: @image-url("../assets/icons/keyboard.svg");
+                                            colorize-icon: true;
+                                            clicked => { root.save-hotkey(root.hotkey-text); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Section {
+                            title: "启动与外观";
+                            subtitle: "登录行为、托盘与主题。";
+
+                            VerticalLayout {
+                                spacing: 0;
+
+                                SwitchRow {
+                                    title: "登录时启动";
+                                    subtitle: "登录 Windows 后自动运行 PadPointer。";
+                                    checked: root.startup-enabled;
+                                    toggled(value) => { root.change-option(4, value ? 1 : 0); }
+                                }
+
+                                Divider { }
+
+                                SwitchRow {
+                                    title: "自启动时隐藏";
+                                    subtitle: "由登录自启动时只显示托盘图标。";
+                                    checked: root.start-hidden;
+                                    toggled(value) => { root.change-option(2, value ? 1 : 0); }
+                                }
+
+                                Divider { }
+
+                                SwitchRow {
+                                    title: "关闭到托盘";
+                                    subtitle: "关闭主窗口后继续在后台运行。";
+                                    checked: root.close-to-tray;
+                                    toggled(value) => { root.change-option(3, value ? 1 : 0); }
+                                }
+
+                                Divider { }
+
+                                SettingsRow {
+                                    title: "主题";
+                                    subtitle: "跟随 Windows 外观，或固定为浅色／深色。";
+
+                                    ComboBox {
+                                        model: ["跟随系统", "浅色", "深色"];
+                                        current-index: root.theme-index;
+                                        width: 170px;
+                                        selected => { root.change-option(1, self.current-index); }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: "移动便携版 EXE 后，需要重新登记自启动路径。";
+                                color: Colors.ink-tertiary;
+                                font-size: 12px;
+                                wrap: word-wrap;
+                            }
+                        }
+
+                        Section {
+                            title: "配置管理";
+                            subtitle: "备份或迁移本地配置。";
+
+                            HorizontalLayout {
+                                spacing: 8px;
+
+                                Button {
+                                    text: "导入 JSON";
+                                    icon: @image-url("../assets/icons/folder.svg");
+                                    colorize-icon: true;
+                                    clicked => { root.exchange(false); }
+                                }
+
+                                Button {
+                                    text: "导出 JSON";
+                                    clicked => { root.exchange(true); }
+                                }
+
+                                Button {
+                                    text: "打开数据目录";
+                                    clicked => { root.open-folder(); }
+                                }
+
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+                        }
+                    }
+                }
+
+                // ---------- About ----------
+                if root.page == 4 : ScrollView {
+                    VerticalLayout {
+                        alignment: start;
+                        spacing: 12px;
+                        padding-right: 14px;
+                        padding-bottom: 24px;
+
+                        Section {
+                            title: "PadPointer " + root.version;
+                            subtitle: "Windows 手柄桌面控制器";
+
+                            HorizontalLayout {
+                                spacing: 16px;
+
+                                Image {
+                                    width: 56px;
+                                    height: 56px;
+                                    source: @image-url("../assets/padpointer.svg");
+                                }
+
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    spacing: 8px;
+
+                                    Text {
+                                        text: "用 Xbox 或兼容 XInput 的手柄控制 Windows 桌面：左摇杆移动指针，右摇杆滚动，其余按键映射为鼠标与键盘动作。";
+                                        color: Colors.ink-secondary;
+                                        font-size: 13px;
+                                        wrap: word-wrap;
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: 6px;
+
+                                        Chip { text: "Rust"; }
+                                        Chip { text: "Slint"; }
+                                        Chip { text: "XInput 1.4"; }
+                                        Chip { text: "SendInput"; }
+                                        Rectangle { horizontal-stretch: 1; }
+                                    }
+                                }
+                            }
+
+                            Divider { }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+
+                                Image {
+                                    width: 14px;
+                                    height: 14px;
+                                    source: @image-url("../assets/icons/check.svg");
+                                    colorize: Colors.ok;
+                                }
+
+                                Text {
+                                    text: "PadPointer 采用 MIT 许可证，第三方组件许可见发布包的 LICENSES 目录。";
+                                    color: Colors.ink-tertiary;
+                                    font-size: 12px;
+                                    horizontal-stretch: 1;
+                                    wrap: word-wrap;
+                                }
+                            }
+                        }
+
+                        Section {
+                            title: "数据目录";
+                            subtitle: "配置、日志与损坏配置的备份都保存在这里。";
+
+                            Rectangle {
+                                background: Colors.well;
+                                border-radius: 4px;
+                                border-width: 1px;
+                                border-color: Colors.stroke;
+
+                                HorizontalLayout {
+                                    padding: 12px;
+                                    spacing: 12px;
+
+                                    Text {
+                                        text: root.storage;
+                                        color: Colors.ink-secondary;
+                                        font-size: 12px;
+                                        horizontal-stretch: 1;
+                                        wrap: char-wrap;
+                                    }
+
+                                    Button {
+                                        text: "打开";
+                                        clicked => { root.open-folder(); }
+                                    }
+                                }
+                            }
+                        }
+
+                        Section {
+                            title: "输入与权限";
+                            subtitle: "XInput 能读取的范围与系统限制。";
+
+                            Text {
+                                text: "程序读取 XInput 标准按键与扳机；Guide 和厂商背键取决于手柄是否通过标准输入暴露。Windows 可能阻止对管理员窗口及 UAC 安全桌面的模拟输入。";
+                                color: Colors.ink-secondary;
+                                font-size: 13px;
+                                wrap: word-wrap;
+                            }
+                        }
+
+                        Section {
+                            title: "界面框架";
+                            subtitle: "PadPointer 的界面使用 Slint 构建。";
+
+                            HorizontalLayout {
+                                alignment: center;
+
+                                AboutSlint {
+                                    width: 280px;
+                                    height: 124px;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+
+

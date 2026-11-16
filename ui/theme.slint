@@ -1,0 +1,54 @@
+// PadPointer design tokens.
+//
+// The surfaces and text colors mirror the Fluent (WinUI 3) palette used by the
+// Slint standard widgets, so hand-drawn layouts and stock controls read as one
+// design system. Accent colors are taken from Palette so that the Windows
+// accent color chosen by the user is honored everywhere.
+
+import { Palette } from "std-widgets.slint";
+
+export global Colors {
+    in-out property <bool> dark: false;
+
+    public function apply-theme(value: bool) {
+        root.dark = value;
+        Palette.color-scheme = value ? ColorScheme.dark : ColorScheme.light;
+    }
+
+    // Window and navigation surfaces
+    out property <color> window: dark ? #1C1C1C : #F3F3F3;
+    out property <color> pane: dark ? #232323 : #F9F9F9;
+    out property <color> card: dark ? #292929 : #FFFFFF;
+    out property <color> well: dark ? #212121 : #F6F6F6;
+    out property <color> band: dark ? #FFFFFF12 : #00000008;
+
+    // Strokes
+    out property <color> stroke: dark ? #FFFFFF17 : #00000012;
+    out property <color> divider: dark ? #FFFFFF12 : #0000000F;
+
+    // Text
+    out property <color> ink: dark ? #FFFFFF : #1A1A1A;
+    out property <color> ink-secondary: dark ? #FFFFFFC4 : #5C5C5C;
+    out property <color> ink-tertiary: dark ? #FFFFFF8A : #8A8A8A;
+
+    // Interaction states
+    out property <color> hover: dark ? #FFFFFF0D : #00000008;
+    out property <color> pressed: dark ? #FFFFFF1A : #00000010;
+    out property <color> selected: dark ? #FFFFFF14 : #0000000D;
+
+    // Accent, sourced from the active Fluent palette
+    out property <brush> accent: Palette.accent-background;
+    out property <brush> accent-ink: Palette.accent-foreground;
+    out property <color> focus-outer: dark ? #FFFFFF : #000000E6;
+    out property <color> focus-inner: dark ? #000000B3 : #FFFFFF;
+
+    // Semantic colors
+    out property <color> warn: dark ? #FCE100 : #9D5D00;
+    out property <color> ok: dark ? #6CCB5F : #0F7B0F;
+
+    // Controller illustration
+    out property <color> pad-body: dark ? #2B2B2B : #FCFCFC;
+    out property <color> pad-stroke: dark ? #4C4C4C : #BEBEBE;
+    out property <color> pad-chip: dark ? #363636 : #F4F4F4;
+    out property <color> pad-well: dark ? #232323 : #F1F1F1;
+}
