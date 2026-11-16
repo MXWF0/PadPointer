@@ -1,3 +1,6 @@
+<div align="center">
+<img src="assets/padpointer.svg" alt="PadPointer" width="96">
+
 # PadPointer
 
 **用手柄操作 Windows 桌面 —— 轻量的手柄触控板**
